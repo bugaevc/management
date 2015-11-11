@@ -25,7 +25,7 @@ void broadcast_to_children(char *text)
 {
     for (struct child *ch = children; ch != NULL; ch = ch->next) {
         kill(ch->pid, SIGUSR2);
-        fprintf(pipes.to_children_w, "%s\n", text);
+        fprintf(pipes->to_children_w, "%s\n", text);
         pause(); // wait for the child to read the message
     }
 }
@@ -60,10 +60,11 @@ void setup_pipes(void)
     int pipefd[2][2];
     pipe(pipefd[0]);
     pipe(pipefd[1]);
-    pipes.to_children_r = fdopen(pipefd[0][0], "r");
-    pipes.to_children_w = fdopen(pipefd[0][1], "w");
-    pipes.to_parent_r = fdopen(pipefd[1][0], "r");
-    pipes.to_parent_w = fdopen(pipefd[1][1], "w");
+    pipes = malloc(sizeof(*pipes));
+    pipes->to_children_r = fdopen(pipefd[0][0], "r");
+    pipes->to_children_w = fdopen(pipefd[0][1], "w");
+    pipes->to_parent_r = fdopen(pipefd[1][0], "r");
+    pipes->to_parent_w = fdopen(pipefd[1][1], "w");
 }
 
 void setup_sockets(void)

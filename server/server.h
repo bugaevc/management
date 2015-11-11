@@ -11,7 +11,7 @@ enum {
 struct {
     FILE *to_children_r, *to_children_w;
     FILE *to_parent_r, *to_parent_w;
-} pipes;
+} *pipes;
 
 pid_t parent_pid;
 
