@@ -13,6 +13,11 @@ struct {
     FILE *to_parent_r, *to_parent_w;
 } *pipes;
 
+struct vector {
+    int arr[MAX_PORT_CNT];
+    size_t cnt;
+};
+
 pid_t parent_pid;
 
 #endif
