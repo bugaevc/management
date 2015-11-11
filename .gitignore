@@ -28,5 +28,12 @@
 *.x86_64
 *.hex
 
+# Project build targets
+server/server
+client/client
+
 # Debug files
 *.dSYM/
+
+# KDevelop project files
+*.kdev*
