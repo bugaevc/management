@@ -98,6 +98,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Usage: %s players_cnt [port]*\n", argv[0]);
         return 1;
     }
+    parent_pid = getpid();
     setup_signal_handlers();
     setup_pipes();
     int listening_sockets[MAX_PORT_CNT];
