@@ -15,12 +15,6 @@ struct child {
     struct child *next;
 } *children;
 
-int players_cnt;
-int ports[MAX_PORT_CNT];
-int ports_cnt;
-int listening_sockets[MAX_PORT_CNT];
-int listening_sockets_cnt;
-
 void broadcast_to_children(char *text)
 {
     for (struct child *ch = children; ch != NULL; ch = ch->next) {
@@ -30,12 +24,12 @@ void broadcast_to_children(char *text)
     }
 }
 
-int parse_cmdline_args(int argc, char *argv[])
+int parse_cmdline_args(int argc, char *argv[], int *players_cnt, int ports[], int *ports_cnt)
 {
     if (argc < 2) {
         return 0;
     }
-    if (sscanf(argv[1], "%d", &players_cnt) != 1) {
+    if (sscanf(argv[1], "%d", players_cnt) != 1) {
         return 0;
     }
     for (int i = 0; i + 2 < argc; i++) {
@@ -43,7 +37,7 @@ int parse_cmdline_args(int argc, char *argv[])
             return 0;
         }
     }
-    ports_cnt = argc - 2;
+    *ports_cnt = argc - 2;
     return 1;
 }
 
@@ -67,7 +61,7 @@ void setup_pipes(void)
     pipes->to_parent_w = fdopen(pipefd[1][1], "w");
 }
 
-void setup_sockets(void)
+void setup_sockets(int ports[], int ports_cnt, int listening_sockets[], int *listening_sockets_cnt)
 {
     for (int i = 0; i < ports_cnt; i++) {
         listening_sockets[i] = socket(AF_INET, SOCK_STREAM, 0);
@@ -92,16 +86,22 @@ void setup_sockets(void)
             exit(2);
         }
     }
+    *listening_sockets_cnt = ports_cnt;
 }
 
 int main(int argc, char *argv[])
 {
-    if (!parse_cmdline_args(argc, argv)) {
+    int players_cnt;
+    int ports[MAX_PORT_CNT];
+    int ports_cnt;
+    if (!parse_cmdline_args(argc, argv, &players_cnt, ports, &ports_cnt)) {
         fprintf(stderr, "Usage: %s players_cnt [port]*\n", argv[0]);
         return 1;
     }
     setup_signal_handlers();
     setup_pipes();
-    setup_sockets();
+    int listening_sockets[MAX_PORT_CNT];
+    int listening_sockets_cnt;
+    setup_sockets(ports, ports_cnt, listening_sockets, &listening_sockets_cnt);
     return 0;
 }
