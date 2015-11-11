@@ -1,8 +1,12 @@
 #include <sys/types.h>
 
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+
+#include <sys/socket.h>
+#include <netinet/ip.h>
 
 #include "server.h"
 
@@ -14,6 +18,8 @@ struct child {
 int players_cnt;
 int ports[MAX_PORT_CNT];
 int ports_cnt;
+int listening_sockets[MAX_PORT_CNT];
+int listening_sockets_cnt;
 
 void broadcast_to_children(char *text)
 {
@@ -60,6 +66,33 @@ void setup_pipes(void)
     pipes.to_parent_w = fdopen(pipefd[1][1], "w");
 }
 
+void setup_sockets(void)
+{
+    for (int i = 0; i < ports_cnt; i++) {
+        listening_sockets[i] = socket(AF_INET, SOCK_STREAM, 0);
+        if (listening_sockets[i] < 0) {
+            perror("socket");
+            exit(2);
+        }
+        union {
+            struct sockaddr sa;
+            struct sockaddr_in sa_in;
+        } sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_in.sin_family = AF_INET;
+        sa.sa_in.sin_port = htons(ports[i]);
+        sa.sa_in.sin_addr.s_addr = htonl(INADDR_ANY);
+        if (bind(listening_sockets[i], &sa.sa, sizeof(sa)) < 0) {
+            perror("bind");
+            exit(2);
+        }
+        if (listen(listening_sockets[i], 5) < 0) {
+            perror("listen");
+            exit(2);
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     if (!parse_cmdline_args(argc, argv)) {
@@ -68,5 +101,6 @@ int main(int argc, char *argv[])
     }
     setup_signal_handlers();
     setup_pipes();
+    setup_sockets();
     return 0;
 }
