@@ -96,7 +96,7 @@ void setup_sockets(void)
 int main(int argc, char *argv[])
 {
     if (!parse_cmdline_args(argc, argv)) {
-        fprintf(stderr, "Usage: server players_cnt [port]*\n");
+        fprintf(stderr, "Usage: %s players_cnt [port]*\n", argv[0]);
         return 1;
     }
     setup_signal_handlers();
