@@ -43,11 +43,11 @@ int parse_cmdline_args(size_t argc, char *argv[], int *players_cnt, struct vecto
     return 1;
 }
 
-void setup_signal_handlers(void)
+void setup_parent_signal_handlers(void)
 {
     struct sigaction act;
     memset(&act, 0, sizeof(act));
-    act.sa_handler = SIG_IGN;
+    act.sa_handler = empty_handler;
     sigaction(SIGUSR2, &act, NULL);
 }
 
@@ -98,7 +98,9 @@ void setup_sockets(struct vector *ports, struct vector *socks)
 // Close&free all the parent stuff
 void init_child(struct vector *socks)
 {
-    for (struct child *ch = children, *next = children->next; ch != NULL; ch = next) {
+    struct child *next;
+    for (struct child *ch = children; ch != NULL; ch = next) {
+        next = ch->next;
         free(ch);
     }
     for (size_t i = 0; i < socks->cnt; i++) {
@@ -156,6 +158,9 @@ void wait_for_players(struct vector *socks, int players_cnt)
                     run_child(new_fd, players_cnt, current_players_cnt);
                     exit(0);
                 }
+                // FIXME critical
+                // the child can kill us before we pause()
+                //pause(); // wait for child to initialize
             }
         }
     }
@@ -170,7 +175,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     parent_pid = getpid();
-    setup_signal_handlers();
+    setup_parent_signal_handlers();
     setup_pipes();
     struct vector *socks = malloc(sizeof(*socks));
     setup_sockets(ports, socks);
