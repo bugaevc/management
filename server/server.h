@@ -20,4 +20,6 @@ struct vector {
 
 pid_t parent_pid;
 
+void run_child(int fd, int players_cnt, int current_players_cnt);
+
 #endif

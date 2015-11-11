@@ -4,8 +4,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
 
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <netinet/ip.h>
 
 #include "server.h"
@@ -59,6 +61,10 @@ void setup_pipes(void)
     pipes->to_children_w = fdopen(pipefd[0][1], "w");
     pipes->to_parent_r = fdopen(pipefd[1][0], "r");
     pipes->to_parent_w = fdopen(pipefd[1][1], "w");
+    setvbuf(pipes->to_children_r, NULL, _IONBF, 0);
+    setvbuf(pipes->to_children_w, NULL, _IONBF, 0);
+    setvbuf(pipes->to_parent_r, NULL, _IONBF, 0);
+    setvbuf(pipes->to_parent_w, NULL, _IONBF, 0);
 }
 
 void setup_sockets(struct vector *ports, struct vector *socks)
@@ -89,18 +95,86 @@ void setup_sockets(struct vector *ports, struct vector *socks)
     socks->cnt = ports->cnt;
 }
 
+// Close&free all the parent stuff
+void init_child(struct vector *socks)
+{
+    for (struct child *ch = children, *next = children->next; ch != NULL; ch = next) {
+        free(ch);
+    }
+    for (size_t i = 0; i < socks->cnt; i++) {
+        close(socks->arr[i]);
+    }
+    fclose(pipes->to_children_w);
+    fclose(pipes->to_parent_r);
+}
+
+void wait_for_players(struct vector *socks, int players_cnt)
+{
+    int current_players_cnt = 0;
+    while (current_players_cnt < players_cnt) {
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        int max_d = -1;
+        for (size_t i = 0; i < socks->cnt; i++) {
+            if (socks->arr[i] > max_d) {
+                max_d = socks->arr[i];
+            }
+            FD_SET(socks->arr[i], &read_fds);
+        }
+        // this will block
+        int res = select(max_d + 1, &read_fds, NULL, NULL, NULL);
+        if (res < 1) {
+            if (errno == EINTR) {
+                continue;
+            }
+            perror("select");
+            exit(2);
+        }
+        for (size_t i = 0; i < socks->cnt; i++) {
+            if (FD_ISSET(socks->arr[i], &read_fds)) {
+                // new connection!
+                int new_fd = accept(socks->arr[i], NULL, NULL);
+                if (new_fd < 0) {
+                    perror("accept");
+                    // do not abort the program
+                    // continue to the next iteration of the main loop
+                    break;
+                }
+                current_players_cnt++;
+                // FIXME: write something nice
+                broadcast_to_children("New connection!");
+                // prepend a new struct child to the list
+                struct child *tmp = children;
+                children = malloc(sizeof(struct child));
+                children->next = tmp;
+                children->pid = fork();
+                if (!children->pid) {
+                    // Screw that, we don't need that structure anymore
+                    // Because we're the child!
+                    // Close&free everithing
+                    init_child(socks);
+                    run_child(new_fd, players_cnt, current_players_cnt);
+                    exit(0);
+                }
+            }
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     int players_cnt;
-    struct vector ports;
-    if (!parse_cmdline_args(argc, argv, &players_cnt, &ports)) {
+    struct vector *ports = malloc(sizeof(*ports));
+    if (!parse_cmdline_args(argc, argv, &players_cnt, ports)) {
         fprintf(stderr, "Usage: %s players_cnt [port]*\n", argv[0]);
         return 1;
     }
     parent_pid = getpid();
     setup_signal_handlers();
     setup_pipes();
-    struct vector socks;
-    setup_sockets(&ports, &socks);
+    struct vector *socks = malloc(sizeof(*socks));
+    setup_sockets(ports, socks);
+    wait_for_players(socks, players_cnt);
+    printf("Game here");
     return 0;
 }
